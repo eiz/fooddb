@@ -4,11 +4,14 @@
             "command": "uv",
             "args": [
                 "--directory",
-                "/Users/eiz/code/fooddb",
+                "/path/to/fooddb",
                 "run",
                 "food",
                 "run-server"
-            ]
+            ],
+            "env": {
+                "OPENAI_API_KEY": "your-openai-api-key-here"
+            }
         }
     }
 }

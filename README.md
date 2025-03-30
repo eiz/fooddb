@@ -2,6 +2,16 @@
 
 An MCP server for querying USDA Food Data Central information. It provides tools to search for foods and get detailed nutritional information.
 
+> **Note**: This project was 100% created with Claude AI. No human has directly edited any code files. All development was done through AI-assisted programming.
+
+## Data Source
+
+To use this project, you'll need to download the USDA Food Data Central dataset:
+
+1. Visit [USDA FDC Download Datasets](https://fdc.nal.usda.gov/download-datasets.html)
+2. Download the "Full Download" package
+3. Extract the CSV files to the `./data` directory in this project
+
 ## Features
 
 - Import USDA Food Data Central CSV files into a SQLite database
@@ -25,13 +35,13 @@ Before using the server, you need to import the USDA data:
 
 ```bash
 # Import data from the default location (./data) with embeddings generation
-uv run python -m fooddb.cli init-db
+uv run food init-db
 
 # Custom data and database paths
-uv run python -m fooddb.cli init-db --data-dir /path/to/data --db-path sqlite:///custom.sqlite
+uv run food init-db --data-dir /path/to/data --db-path custom.sqlite
 
 # Skip embeddings generation
-uv run python -m fooddb.cli init-db --no-embeddings
+uv run food init-db --no-embeddings
 ```
 
 ### Generate Embeddings
@@ -40,10 +50,10 @@ If you need to generate or update embeddings for vector search:
 
 ```bash
 # Generate ALL embeddings for foods that don't have them yet
-uv run python -m fooddb.cli generate-embeddings
+uv run food generate-embeddings
 
 # Process foods in larger batches (default is 1000)
-uv run python -m fooddb.cli generate-embeddings --batch-size 5000
+uv run food generate-embeddings --batch-size 5000
 ```
 
 For vector search to work, you need to set the `OPENAI_API_KEY` environment variable:
@@ -52,18 +62,36 @@ For vector search to work, you need to set the `OPENAI_API_KEY` environment vari
 export OPENAI_API_KEY=your-api-key
 ```
 
+### Search for Foods
+
+You can search for foods using the CLI:
+
+```bash
+# Search for foods matching a query
+uv run food search "ice cream" --limit 5
+```
+
+### Get Food Information
+
+Get detailed information about a specific food by its ID:
+
+```bash
+# Display detailed nutrition information for a food
+uv run food info 167575
+```
+
 ### Run the MCP Server
 
 Run the server with the stdio transport (for use with Claude Desktop):
 
 ```bash
-uv run python -m fooddb.cli run-server
+uv run food run-server
 ```
 
 Or with the HTTP transport for other clients:
 
 ```bash
-uv run python -m fooddb.cli run-server --transport http --port 8000
+uv run food run-server --transport http --port 8000
 ```
 
 ## Integrating with Claude for Desktop
@@ -79,50 +107,41 @@ To use this server with Claude for Desktop, add it to your Claude Desktop config
                 "--directory",
                 "/path/to/fooddb",
                 "run",
-                "python",
-                "-m",
-                "fooddb.cli",
+                "food",
                 "run-server"
-            ]
+            ],
+            "env": {
+                "OPENAI_API_KEY": "your-openai-api-key-here"
+            }
         }
     }
 }
 ```
 
+**Important**: 
+- Replace `/path/to/fooddb` with the absolute path to your fooddb installation
+- Replace `your-openai-api-key-here` with your actual OpenAI API key
+- The `env` section is required for vector search functionality
+- Without a valid OpenAI API key, only basic text matching searches will work
+
 ## MCP Tools
 
 The server provides the following MCP tools:
 
-### search_foods
+### food_search
 
-Search for foods by name/description using basic text matching.
+Search for foods using semantic vector search via embeddings. This can find foods that match the concept even if they don't contain the exact keywords.
 
 ```python
-search_foods(query: str, limit: int = 5) -> List[Dict]
+food_search(query: str, limit: int = 10, model: str = "text-embedding-3-small") -> List[Dict]
 ```
 
-### search_foods_ai
+### food_info
 
-Search for foods using an enhanced matching algorithm, with vector search as a first option when available.
-
-```python
-search_foods_ai(query: str, limit: int = 5) -> List[Dict]
-```
-
-### semantic_food_search
-
-Search for foods using AI vector embeddings for semantic matching. This can find foods that match the concept even if they don't contain the exact keywords.
+Get detailed information about a specific food by ID, including nutritional content, portions, and brand information.
 
 ```python
-semantic_food_search(query: str, limit: int = 10) -> List[Dict]
-```
-
-### get_food_by_id
-
-Get detailed information about a specific food by ID.
-
-```python
-get_food_by_id(food_id: int) -> Optional[Dict]
+food_info(food_id: int) -> str
 ```
 
 ## Development

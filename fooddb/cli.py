@@ -4,7 +4,7 @@ import click
 from fooddb.import_data import import_all_data
 from fooddb.embeddings import setup_vector_db, generate_batch_embeddings, search_food_by_text
 from fooddb.server import mcp
-from fooddb.models import DEFAULT_DB_PATH
+from fooddb.models import DEFAULT_DB_PATH, generate_food_info
 
 # Default logging configuration - will be overridden in CLI
 logging.basicConfig(
@@ -157,7 +157,6 @@ def run_server(transport, port):
     root_logger.addHandler(file_handler)
     
     # Set root logger to DEBUG to capture everything
-    previous_level = root_logger.level
     root_logger.setLevel(logging.DEBUG)
     
     # Log server startup
@@ -222,6 +221,26 @@ def search(query: tuple, limit: int, db_path: str, model: str):
         # Format similarity as percentage
         similarity_pct = f"{similarity * 100:.1f}%"
         click.echo(f"{fdc_id:<12} {similarity_pct:<12} {description}")
+
+
+@cli.command()
+@click.argument("food_id", type=int)
+@click.option(
+    "--db-path",
+    default=DEFAULT_DB_PATH,
+    help="SQLite database path",
+)
+def info(food_id: int, db_path: str):
+    """
+    Display detailed information about a specific food by its ID.
+    
+    FOOD_ID is the unique identifier for the food item.
+    """
+    # Generate the food information using the reusable function
+    info_text = generate_food_info(food_id, db_path)
+    
+    # Display the information to the user
+    click.echo(info_text)
 
 
 if __name__ == "__main__":

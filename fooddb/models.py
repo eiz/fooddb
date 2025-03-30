@@ -160,3 +160,148 @@ def get_db_session(db_path: str = None):
 def init_db(engine):
     """Create all tables in the database."""
     Base.metadata.create_all(engine)
+
+
+def generate_food_info(food_id: int, db_path: str = None) -> str:
+    """
+    Generate detailed information about a specific food by its ID.
+    
+    Args:
+        food_id: The unique identifier for the food item
+        db_path: SQLite database path
+        
+    Returns:
+        Formatted string with food information
+    """
+    result = []
+    try:
+        # Create a database session
+        session, _ = get_db_session(db_path)
+        
+        # Query the food item with all related data
+        food = session.query(Food).filter(Food.fdc_id == food_id).first()
+        
+        if not food:
+            return f"❌ Food with ID {food_id} not found in database."
+        
+        # Display basic food information
+        result.append("\n" + "=" * 80)
+        result.append(f"🍽️  FOOD DETAILS: {food.description} (ID: {food.fdc_id})")
+        result.append("=" * 80)
+        result.append(f"Type: {food.data_type}")
+        if food.food_category_id:
+            result.append(f"Category: {food.food_category_id}")
+        if food.publication_date:
+            result.append(f"Publication Date: {food.publication_date}")
+        result.append("")
+        
+        # Display branded food information if available
+        if food.branded_food:
+            bf = food.branded_food
+            result.append("📋 BRANDED FOOD INFORMATION")
+            result.append("-" * 80)
+            if bf.brand_owner:
+                result.append(f"Brand Owner: {bf.brand_owner}")
+            if bf.brand_name:
+                result.append(f"Brand Name: {bf.brand_name}")
+            if bf.branded_food_category:
+                result.append(f"Category: {bf.branded_food_category}")
+            if bf.gtin_upc:
+                result.append(f"UPC: {bf.gtin_upc}")
+            if bf.serving_size:
+                size_str = f"{bf.serving_size}"
+                if bf.serving_size_unit:
+                    size_str += f" {bf.serving_size_unit}"
+                result.append(f"Serving Size: {size_str}")
+            if bf.household_serving_fulltext:
+                result.append(f"Household Serving: {bf.household_serving_fulltext}")
+            if bf.ingredients:
+                result.append(f"\nIngredients: {bf.ingredients}")
+            result.append("")
+        
+        # Display nutrient information
+        if food.nutrients:
+            result.append("🧪 NUTRITION INFORMATION")
+            result.append("-" * 80)
+            # Sort nutrients by rank for more organized display
+            sorted_nutrients = sorted(
+                food.nutrients, 
+                key=lambda fn: fn.nutrient.rank if fn.nutrient and fn.nutrient.rank else 9999
+            )
+            for fn in sorted_nutrients:
+                if fn.nutrient and fn.amount:
+                    result.append(f"{fn.nutrient.name:<30} {fn.amount:>8.2f} {fn.nutrient.unit_name}")
+            result.append("")
+        
+        # Display portion information
+        if food.portions:
+            result.append("📏 SERVING SIZE INFORMATION")
+            result.append("-" * 80)
+            for portion in food.portions:
+                portion_desc = []
+                if portion.amount:
+                    portion_desc.append(f"{portion.amount}")
+                if portion.measure_unit_id:
+                    portion_desc.append(portion.measure_unit_id)
+                if portion.portion_description:
+                    portion_desc.append(f"({portion.portion_description})")
+                if portion.modifier:
+                    portion_desc.append(portion.modifier)
+                
+                portion_str = " ".join(portion_desc)
+                if portion.gram_weight:
+                    result.append(f"{portion_str:<50} = {portion.gram_weight:>8.2f} g")
+                else:
+                    result.append(f"{portion_str}")
+            result.append("")
+        
+        # Display food components
+        if food.components:
+            result.append("🧩 FOOD COMPONENTS")
+            result.append("-" * 80)
+            for comp in food.components:
+                comp_info = []
+                if comp.name:
+                    comp_info.append(comp.name)
+                if comp.pct_weight:
+                    comp_info.append(f"{comp.pct_weight:.1f}%")
+                if comp.gram_weight:
+                    comp_info.append(f"{comp.gram_weight:.2f}g")
+                if comp.is_refuse:
+                    comp_info.append("(refuse)")
+                    
+                result.append(" - " + ", ".join(comp_info))
+            result.append("")
+        
+        # Display input foods (for multi-ingredient foods)
+        if food.input_foods:
+            result.append("🧑‍🍳 INGREDIENTS/INPUT FOODS")
+            result.append("-" * 80)
+            for input_food in sorted(food.input_foods, key=lambda x: x.seq_num if x.seq_num else 9999):
+                input_desc = []
+                if input_food.sr_description:
+                    input_desc.append(input_food.sr_description)
+                elif input_food.fdc_id_of_input_food:
+                    input_desc.append(f"Food #{input_food.fdc_id_of_input_food}")
+                
+                if input_food.amount:
+                    amount_str = f"{input_food.amount}"
+                    if input_food.unit:
+                        amount_str += f" {input_food.unit}"
+                    input_desc.append(amount_str)
+                
+                if input_food.portion_description:
+                    input_desc.append(f"({input_food.portion_description})")
+                
+                if input_food.gram_weight:
+                    input_desc.append(f"= {input_food.gram_weight:.2f}g")
+                    
+                result.append(" - " + " ".join(input_desc))
+            result.append("")
+            
+    except Exception as e:
+        return f"❌ Error retrieving food information: {e}"
+    finally:
+        session.close()
+    
+    return "\n".join(result)

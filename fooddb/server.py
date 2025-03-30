@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 # Import the MCP server package
 from mcp.server.fastmcp import FastMCP
 
-from fooddb.models import get_db_session
+from fooddb.models import get_db_session, generate_food_info
 from fooddb.embeddings import search_food_by_text
 
 # Import default database path from models.py
@@ -116,6 +116,35 @@ async def food_search(query: str, limit: int = 10, model: str = "text-embedding-
         logger.error(f"Error in food_search: {e}", exc_info=True)
         # Return empty results on error
         return []
+
+
+@mcp.tool()
+async def food_info(food_id: int) -> str:
+    """
+    Get detailed information about a specific food by its ID.
+    
+    This tool provides comprehensive nutritional information, 
+    portion sizes, ingredients, and other details about a specific food item.
+    
+    Args:
+        food_id: The unique identifier for the food item
+    
+    Returns:
+        Formatted string with detailed food information
+    """
+    logger.info(f"MCP food_info called with food_id: {food_id}")
+    
+    try:
+        # Use the same function that the CLI uses
+        info_text = generate_food_info(food_id)
+        
+        # Log success
+        logger.info(f"Successfully retrieved info for food ID {food_id}")
+        
+        return info_text
+    except Exception as e:
+        logger.error(f"Error in food_info: {e}", exc_info=True)
+        return f"Error retrieving food information: {e}"
 
 
 def run_server():
