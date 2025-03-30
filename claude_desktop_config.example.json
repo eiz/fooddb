@@ -6,9 +6,7 @@
                 "--directory",
                 "/Users/eiz/code/fooddb",
                 "run",
-                "python",
-                "-m",
-                "fooddb.cli",
+                "food",
                 "run-server"
             ]
         }
