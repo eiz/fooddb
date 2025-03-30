@@ -1,4 +1,5 @@
 from typing import Any, Dict, List, Optional, Tuple
+import logging
 
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import joinedload
@@ -11,6 +12,9 @@ from fooddb.models import (
     get_db_session
 )
 from fooddb.embeddings import search_food_by_text
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Initialize MCP server
 mcp = FastMCP("fooddb", description="USDA Food Database API for nutritional information")
@@ -62,7 +66,7 @@ class FoodDBService:
             return results
             
         except Exception as e:
-            print(f"Vector search failed: {e}")
+            logger.error(f"Vector search failed: {e}")
             return []
 
 

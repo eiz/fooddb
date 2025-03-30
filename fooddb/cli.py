@@ -145,11 +145,13 @@ def generate_embeddings(batch_size, db_path, parallel, timeout):
 )
 def run_server(transport, port):
     """Run the MCP server using the specified transport."""
-    click.echo(f"Starting FoodDB MCP server with {transport} transport")
-    
+    # Only print startup message for HTTP transport
+    # For stdio transport, we must not print anything to avoid interfering with MCP protocol
     if transport == "http":
+        click.echo(f"Starting FoodDB MCP server with HTTP transport on port {port}")
         mcp.run(transport=transport, port=port)
     else:
+        # No output for stdio transport to avoid breaking the protocol
         mcp.run(transport=transport)
 
 

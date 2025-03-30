@@ -66,7 +66,7 @@ def setup_vector_db(db_path: str = "fooddb.sqlite") -> None:
     # Verify the extension loaded correctly
     cursor = execute_query(conn, "SELECT vec_version()")
     vec_version = cursor.fetchone()[0]
-    print(f"Using sqlite-vec version {vec_version}")
+    logger.info(f"Using sqlite-vec version {vec_version}")
     
     # Check if vector table exists, drop and recreate if needed
     execute_query(conn, "DROP TABLE IF EXISTS food_embeddings;")
@@ -75,24 +75,24 @@ def setup_vector_db(db_path: str = "fooddb.sqlite") -> None:
         embedding FLOAT[{EMBEDDING_DIMS}]
     );
     """)
-    print(f"Created food_embeddings virtual table with {EMBEDDING_DIMS} dimensions")
+    logger.info(f"Created food_embeddings virtual table with {EMBEDDING_DIMS} dimensions")
     
     # Check if index exists on fdc_id and create it if not
     cursor = execute_query(conn, "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_food_fdc_id';")
     if not cursor.fetchone():
         # Create index on food.fdc_id to speed up LEFT JOIN queries
         execute_query(conn, "CREATE INDEX IF NOT EXISTS idx_food_fdc_id ON food(fdc_id);")
-        print("Created index on food.fdc_id")
+        logger.info("Created index on food.fdc_id")
     
     # Close connection
     close_db(conn)
-    print("Vector database setup complete")
+    logger.info("Vector database setup complete")
 
 
 def generate_embedding(text: str, model: str = "text-embedding-3-small") -> Optional[List[float]]:
     """Generate an embedding vector for the given text using OpenAI API."""
     if not client:
-        print("Warning: OpenAI client not initialized. Set OPENAI_API_KEY environment variable.")
+        logger.warning("OpenAI client not initialized. Set OPENAI_API_KEY environment variable.")
         return None
     
     try:
@@ -102,7 +102,7 @@ def generate_embedding(text: str, model: str = "text-embedding-3-small") -> Opti
         )
         return response.data[0].embedding
     except Exception as e:
-        print(f"Error generating embedding: {e}")
+        logger.error(f"Error generating embedding: {e}")
         return None
 
 
@@ -208,7 +208,7 @@ def search_by_embedding(
         results = _knn_vector_search(conn, query_embedding, limit, include_description=False)
         return results
     except Exception as e:
-        print(f"Error searching by embedding: {e}")
+        logger.error(f"Error searching by embedding: {e}")
         return []
     finally:
         close_db(conn)
@@ -467,7 +467,7 @@ def search_food_by_text(
         List of tuples (fdc_id, description, similarity_score)
     """
     if not client:
-        print("Warning: OpenAI client not initialized. Set OPENAI_API_KEY environment variable.")
+        logger.warning("OpenAI client not initialized. Set OPENAI_API_KEY environment variable.")
         return []
     
     start_time = time.time()
@@ -494,7 +494,7 @@ def search_food_by_text(
         
         return results
     except Exception as e:
-        print(f"Error searching by text: {e}")
+        logger.error(f"Error searching by text: {e}")
         return []
     finally:
         close_db(conn)
