@@ -1,6 +1,7 @@
 import csv
 import os
 import sqlite3
+import time
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -535,7 +536,6 @@ def import_all_data(
         print(f"Generating initial batch of embeddings in {parallel_mode} mode ({parallel} workers)...")
         print(f"Embedding generation will timeout after {timeout} seconds")
         
-        import time
         start_time = time.time()
         
         generate_batch_embeddings(

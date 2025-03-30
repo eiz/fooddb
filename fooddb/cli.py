@@ -2,6 +2,8 @@ import time
 import logging
 import click
 from fooddb.import_data import import_all_data
+from fooddb.embeddings import setup_vector_db, generate_batch_embeddings, search_food_by_text
+from fooddb.server import mcp
 
 # Default logging configuration - will be overridden in CLI
 logging.basicConfig(
@@ -116,8 +118,6 @@ def init_db(data_dir, db_path, nuke, fast, embeddings, parallel, timeout):
 )
 def generate_embeddings(batch_size, db_path, parallel, timeout):
     """Generate or update food embeddings for vector search."""
-    from fooddb.embeddings import setup_vector_db, generate_batch_embeddings
-    
     click.echo(f"Setting up vector database at {db_path}")
     setup_vector_db(db_path)
     
@@ -152,9 +152,6 @@ def generate_embeddings(batch_size, db_path, parallel, timeout):
 )
 def run_server(transport, port):
     """Run the MCP server using the specified transport."""
-    # Import here to avoid circular imports
-    from fooddb.server import mcp
-    
     click.echo(f"Starting FoodDB MCP server with {transport} transport")
     
     if transport == "http":
@@ -187,8 +184,6 @@ def vector_search(query: str, limit: int, db_path: str, model: str):
     
     QUERY is the text to search for (e.g., "high protein breakfast").
     """
-    from fooddb.embeddings import search_food_by_text
-    
     click.echo(f"🔍 Searching for foods matching: '{query}'")
     click.echo(f"Using model: {model}")
     

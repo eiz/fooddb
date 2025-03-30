@@ -10,7 +10,10 @@
 ## Code Style Guidelines
 - **Package Manager**: Use uv for dependency management
 - **Formatting**: Black with default settings
-- **Imports**: stdlib → third-party → local (sorted alphabetically)
+- **Imports**: 
+  - stdlib → third-party → local (sorted alphabetically)
+  - All imports must be at the top module level, not inside functions
+  - Only exception is for platform-specific imports needed for conditional logic
 - **Types**: Type hints required for all functions and classes
 - **Naming**: snake_case for variables/functions, PascalCase for classes
 - **Error Handling**: Use specific exceptions with context
