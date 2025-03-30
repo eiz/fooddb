@@ -1,5 +1,4 @@
-from datetime import date
-from typing import List, Optional, Text
+# No datetime import needed
 
 from sqlalchemy import (
     Column,

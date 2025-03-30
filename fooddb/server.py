@@ -1,10 +1,8 @@
-from pathlib import Path
-from typing import Any, Dict, List, Optional, TypedDict, Union, cast
+from typing import Any, Dict, List, Optional
 
-import pandas as pd
 from pydantic import BaseModel, Field
-from sqlalchemy import func, text
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 # Import the MCP server package
 from mcp.server.fastmcp import FastMCP
@@ -19,12 +17,7 @@ from fooddb.models import (
     InputFood,
     get_db_session
 )
-from fooddb.embeddings import (
-    setup_vector_db,
-    generate_embedding,
-    search_food_by_text,
-    generate_batch_embeddings
-)
+from fooddb.embeddings import search_food_by_text
 
 # Type definitions for our API responses
 class Macros(BaseModel):

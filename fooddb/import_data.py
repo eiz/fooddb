@@ -1,16 +1,14 @@
-import csv
 import os
 import sqlite3
 import time
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Optional
 
 import pandas as pd
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from fooddb.models import (
-    Base, 
     Food, 
     FoodNutrient, 
     FoodPortion, 

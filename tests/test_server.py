@@ -1,21 +1,15 @@
-import os
-import tempfile
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
 
 from fooddb.models import (
-    Base,
     Food,
     FoodNutrient,
     FoodPortion,
     Nutrient,
-    get_db_session,
-    init_db,
+    BrandedFood,
 )
-from fooddb.server import FoodDBService, FoodInfo, Macros, ServingInfo
+from fooddb.server import FoodDBService
 
 
 @pytest.fixture
@@ -73,14 +67,23 @@ def mock_session():
         gram_weight=100.0,
     )
     
+    # Create test branded food with proper string attributes for Pydantic validation
+    test_branded_food = MagicMock()
+    test_branded_food.fdc_id = 12345
+    test_branded_food.brand_owner = "Test Brand Owner"
+    test_branded_food.brand_name = "Test Brand"
+    test_branded_food.ingredients = "Test Ingredients"
+    test_branded_food.serving_size = 100.0
+    test_branded_food.serving_size_unit = "g"
+    test_branded_food.household_serving_fulltext = "1 cup"
+    test_branded_food.branded_food_category = "Test Category"
+    
     # Configure mock query responses
     mock_query = MagicMock()
     mock_session.query.return_value = mock_query
     
     # Configure filter for Food query
     mock_food_filter = MagicMock()
-    mock_food_first = MagicMock(return_value=test_food)
-    mock_food_all = MagicMock(return_value=[test_food])
     mock_food_filter.first.return_value = test_food
     mock_food_filter.all.return_value = [test_food]
     mock_food_filter.limit.return_value = mock_food_filter
@@ -88,10 +91,6 @@ def mock_session():
     # Configure filter for FoodNutrient query
     mock_nutrients_filter = MagicMock()
     mock_nutrients_options = MagicMock()
-    mock_nutrients_all = MagicMock(return_value=[
-        test_food_nutrient_calories, 
-        test_food_nutrient_protein
-    ])
     mock_nutrients_options.all.return_value = [
         test_food_nutrient_calories, 
         test_food_nutrient_protein
@@ -100,8 +99,11 @@ def mock_session():
     
     # Configure filter for FoodPortion query
     mock_portions_filter = MagicMock()
-    mock_portions_all = MagicMock(return_value=[test_food_portion])
     mock_portions_filter.all.return_value = [test_food_portion]
+    
+    # Configure filter for BrandedFood query
+    mock_branded_filter = MagicMock()
+    mock_branded_filter.first.return_value = test_branded_food
     
     # Configure query behavior based on queried model
     def query_side_effect(model):
@@ -114,6 +116,9 @@ def mock_session():
             return mock_query
         elif model == FoodPortion:
             mock_query.filter.return_value = mock_portions_filter
+            return mock_query
+        elif model == BrandedFood:
+            mock_query.filter.return_value = mock_branded_filter
             return mock_query
         return mock_query
     

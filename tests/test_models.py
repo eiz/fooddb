@@ -1,13 +1,7 @@
-import os
 import tempfile
 import unittest.mock
-from pathlib import Path
-
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
 
 from fooddb.models import (
-    Base,
     Food,
     FoodNutrient,
     FoodPortion,
@@ -15,7 +9,6 @@ from fooddb.models import (
     get_db_session,
     init_db,
 )
-from fooddb.embeddings import generate_batch_embeddings
 
 
 def test_db_initialization():
@@ -146,8 +139,8 @@ def test_parallel_embedding_implementation():
                         # Setup a sequence of time returns: start, check timeout (exceeds limit), should exit
                         mock_time.side_effect = [0, 10, 20]  # Start=0, Check=10 (> timeout), Exit=20
                         
-                        # Patch logger to check for timeout message
-                        with unittest.mock.patch('fooddb.embeddings.logger') as mock_logger:
+                        # Just patch the logger to prevent timeout messages from showing in test output
+                        with unittest.mock.patch('fooddb.embeddings.logger'):
                             # Import here to use patched versions
                             from fooddb.embeddings import generate_batch_embeddings
                             
