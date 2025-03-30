@@ -1,15 +1,11 @@
 import os
 import json
 import sqlite3
-import asyncio
 import concurrent.futures
 import logging
 import time
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import List, Optional, Tuple
 
-import openai
-import numpy as np
 from openai import OpenAI
 import sqlite_vec
 
@@ -35,7 +31,7 @@ def execute_query(conn, query, params=None, many=False):
 
 # Log connection operations
 def connect_db(db_path):
-    """Connect to the database with logging"""
+    """Connect to the database with logging and loading the sqlite-vec extension"""
     if db_path.startswith('sqlite:///'):
         sqlite_path = db_path[10:]
     else:
@@ -43,6 +39,15 @@ def connect_db(db_path):
     
     logger.info(f"SQL: Opening connection to {sqlite_path}")
     conn = sqlite3.connect(sqlite_path)
+    
+    # Always load the sqlite-vec extension for all connections
+    conn.enable_load_extension(True)
+    try:
+        sqlite_vec.load(conn)
+        logger.debug("Loaded sqlite-vec extension")
+    except Exception as e:
+        logger.warning(f"Could not load sqlite-vec extension: {e}")
+    
     return conn
 
 def close_db(conn):
@@ -63,27 +68,19 @@ def setup_vector_db(db_path: str = "fooddb.sqlite") -> None:
     conn = connect_db(db_path)
     cursor = conn.cursor()
     
-    # Load sqlite-vec extension
-    conn.enable_load_extension(True)
-    sqlite_vec.load(conn)
-    
-    # Verify it loaded correctly
+    # Verify the extension loaded correctly
     cursor = execute_query(conn, "SELECT vec_version()")
     vec_version = cursor.fetchone()[0]
     print(f"Using sqlite-vec version {vec_version}")
     
-    # Check if embeddings table exists
-    cursor = execute_query(conn, "SELECT name FROM sqlite_master WHERE type='table' AND name='food_embeddings';")
-    if not cursor.fetchone():
-        # Create embeddings table if it doesn't exist
-        execute_query(conn, """
-        CREATE TABLE food_embeddings (
-            fdc_id INTEGER PRIMARY KEY,
-            embedding BLOB,
-            embedding_model TEXT
-        );
-        """)
-        print("Created food_embeddings table")
+    # Check if vector table exists, drop and recreate if needed
+    execute_query(conn, "DROP TABLE IF EXISTS food_embeddings;")
+    execute_query(conn, f"""
+    CREATE VIRTUAL TABLE food_embeddings USING vec0(
+        embedding FLOAT[{EMBEDDING_DIMS}]
+    );
+    """)
+    print(f"Created food_embeddings virtual table with {EMBEDDING_DIMS} dimensions")
     
     # Check if index exists on fdc_id and create it if not
     cursor = execute_query(conn, "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_food_fdc_id';")
@@ -116,12 +113,6 @@ def generate_embedding(text: str, model: str = "text-embedding-3-small") -> Opti
 
 def store_embedding(fdc_id: int, embedding: List[float], model: str, db_path: str = "fooddb.sqlite", conn=None) -> bool:
     """Store an embedding vector in the database."""
-    # Extract SQLite path from SQLAlchemy connection string if needed
-    if db_path.startswith('sqlite:///'):
-        sqlite_path = db_path[10:]
-    else:
-        sqlite_path = db_path
-    
     # Allow passing an existing connection to avoid repeated connection setup
     close_conn = False
     if conn is None:
@@ -129,15 +120,14 @@ def store_embedding(fdc_id: int, embedding: List[float], model: str, db_path: st
         close_conn = True
     
     try:
-        # Convert embedding list to blob using vec_f32
-        embedding_array = np.array(embedding, dtype=np.float32)
-        embedding_blob = embedding_array.tobytes()
+        # Create a JSON string of the embedding vector
+        embedding_json = json.dumps(embedding)
         
-        # Store in database
+        # Store in database - use rowid as fdc_id for the virtual table
         execute_query(
             conn,
-            "INSERT OR REPLACE INTO food_embeddings (fdc_id, embedding, embedding_model) VALUES (?, vec_f32(?), ?)",
-            (fdc_id, embedding_blob, model)
+            "INSERT OR REPLACE INTO food_embeddings (rowid, embedding) VALUES (?, ?)",
+            (fdc_id, embedding_json)
         )
         return True
     except Exception as e:
@@ -154,7 +144,7 @@ def search_by_embedding(
     db_path: str = "fooddb.sqlite"
 ) -> List[Tuple[int, float]]:
     """
-    Search for foods using vector similarity.
+    Search for foods using vector similarity with KNN.
     
     Args:
         query_embedding: The embedding vector to search for
@@ -167,25 +157,24 @@ def search_by_embedding(
     conn = connect_db(db_path)
     
     try:
-        # Load the extension
-        conn.enable_load_extension(True)
-        sqlite_vec.load(conn)
         
-        # Convert embedding list to blob
-        embedding_array = np.array(query_embedding, dtype=np.float32)
-        embedding_blob = embedding_array.tobytes()
+        # Convert embedding to JSON string for the MATCH query
+        query_json = json.dumps(query_embedding)
         
-        # Search using cosine similarity
+        # Search using KNN MATCH syntax for faster retrieval
+        # The 'distance' from vec0 is L2 distance, not cosine, so we convert to similarity
         cursor = execute_query(conn, """
         SELECT 
-            fe.fdc_id, 
-            1 - vec_distance_cosine(fe.embedding, vec_f32(?)) AS similarity
+            rowid,
+            1 - (distance / 2) AS similarity
         FROM 
-            food_embeddings fe
+            food_embeddings
+        WHERE 
+            embedding MATCH ?
         ORDER BY 
-            similarity DESC
+            distance
         LIMIT ?
-        """, (embedding_blob, limit))
+        """, (query_json, limit))
         
         return cursor.fetchall()
     except Exception as e:
@@ -223,9 +212,6 @@ def process_embedding_batch(
     conn = connect_db(db_path)
     
     try:
-        # Load the extension once for the entire batch
-        conn.enable_load_extension(True)
-        sqlite_vec.load(conn)
         
         # Prepare texts
         texts = [food[1] for food in batch]
@@ -252,15 +238,14 @@ def process_embedding_batch(
             for j, embedding_data in enumerate(response.data):
                 fdc_id = fdc_ids[j]
                 embedding = embedding_data.embedding
-                # Convert embedding to blob format expected by sqlite-vec
-                embedding_array = np.array(embedding, dtype=np.float32)
-                embedding_blob = embedding_array.tobytes()
-                values_to_insert.append((fdc_id, embedding_blob, model))
+                # JSON serialize the embedding vectors for the virtual table
+                embedding_json = json.dumps(embedding)
+                values_to_insert.append((fdc_id, embedding_json))
             
             # Use executemany for bulk insert - much faster than individual inserts
             execute_query(
                 conn,
-                "INSERT OR REPLACE INTO food_embeddings (fdc_id, embedding, embedding_model) VALUES (?, vec_f32(?), ?)",
+                "INSERT OR REPLACE INTO food_embeddings (rowid, embedding) VALUES (?, ?)",
                 values_to_insert,
                 many=True
             )
@@ -312,24 +297,18 @@ def generate_batch_embeddings(
         logger.warning("OpenAI client not initialized. Set OPENAI_API_KEY environment variable.")
         return
     
-    # Extract SQLite path from SQLAlchemy connection string if needed
-    if db_path.startswith('sqlite:///'):
-        sqlite_path = db_path[10:]
-    else:
-        sqlite_path = db_path
-    
-    logger.info(f"Connecting to database")
+    logger.info("Connecting to database")
     conn = connect_db(db_path)
     
     try:
         # First, get a count of how many foods need embeddings
-        # Use faster query approach (NOT EXISTS is typically faster than LEFT JOIN for this case)
+        # Use rowid from virtual table since it represents the fdc_id
         count_query = """
         SELECT COUNT(f.fdc_id)
         FROM food f
         WHERE NOT EXISTS (
             SELECT 1 FROM food_embeddings fe
-            WHERE fe.fdc_id = f.fdc_id
+            WHERE fe.rowid = f.fdc_id
         )
         """
         logger.info("Counting foods without embeddings (this may take a moment)...")
@@ -360,13 +339,13 @@ def generate_batch_embeddings(
                 break
                 
             # Get the next batch of foods without embeddings
-            # Use the faster NOT EXISTS approach instead of LEFT JOIN
+            # Use rowid from virtual table since it represents the fdc_id
             batch_query = """
             SELECT f.fdc_id, f.description 
             FROM food f
             WHERE NOT EXISTS (
                 SELECT 1 FROM food_embeddings fe
-                WHERE fe.fdc_id = f.fdc_id
+                WHERE fe.rowid = f.fdc_id
             )
             LIMIT ?
             """
@@ -413,7 +392,6 @@ def generate_batch_embeddings(
                     # Process results as they complete with timeout
                     remaining_timeout = max(1, timeout - (time.time() - start_time))
                     for i, future in enumerate(concurrent.futures.as_completed(futures, timeout=remaining_timeout)):
-                        completion_time = time.time()
                         try:
                             success_count = future.result(timeout=5)  # 5-second timeout for getting result
                             total_processed += success_count
@@ -447,7 +425,7 @@ def search_food_by_text(
     db_path: str = "fooddb.sqlite"
 ) -> List[Tuple[int, str, float]]:
     """
-    Search for foods using semantic text matching.
+    Search for foods using semantic text matching with KNN.
     
     Args:
         query: Text query to search for
@@ -462,38 +440,49 @@ def search_food_by_text(
         print("Warning: OpenAI client not initialized. Set OPENAI_API_KEY environment variable.")
         return []
     
+    start_time = time.time()
     # Generate embedding for the query
+    logger.info(f"Generating embedding for query: '{query}'")
     query_embedding = generate_embedding(query, model)
+    embedding_time = time.time() - start_time
+    logger.info(f"Embedding generation completed in {embedding_time:.2f} seconds")
+    
     if not query_embedding:
         return []
     
     conn = connect_db(db_path)
     
     try:
-        # Load the extension
-        conn.enable_load_extension(True)
-        sqlite_vec.load(conn)
         
-        # Convert embedding list to blob
-        embedding_array = np.array(query_embedding, dtype=np.float32)
-        embedding_blob = embedding_array.tobytes()
+        # Convert embedding to JSON string for the MATCH query
+        query_json = json.dumps(query_embedding)
         
-        # Search using cosine similarity
+        # Search using KNN MATCH syntax for faster retrieval 
+        query_start_time = time.time()
         cursor = execute_query(conn, """
         SELECT 
-            fe.fdc_id, 
+            fe.rowid, 
             f.description,
-            1 - vec_distance_cosine(fe.embedding, vec_f32(?)) AS similarity
+            1 - (distance / 2) AS similarity
         FROM 
             food_embeddings fe
         JOIN 
-            food f ON fe.fdc_id = f.fdc_id
+            food f ON fe.rowid = f.fdc_id
+        WHERE 
+            embedding MATCH ?
         ORDER BY 
-            similarity DESC
+            distance
         LIMIT ?
-        """, (embedding_blob, limit))
+        """, (query_json, limit))
         
-        return cursor.fetchall()
+        results = cursor.fetchall()
+        query_time = time.time() - query_start_time
+        logger.info(f"KNN query completed in {query_time:.2f} seconds, returning {len(results)} results")
+        
+        total_time = time.time() - start_time
+        logger.info(f"Total search time: {total_time:.2f} seconds")
+        
+        return results
     except Exception as e:
         print(f"Error searching by text: {e}")
         return []
