@@ -172,10 +172,7 @@ def _knn_vector_search(
         JOIN 
             food f ON fe.rowid = f.fdc_id
         WHERE 
-            embedding MATCH ?
-        ORDER BY 
-            distance
-        LIMIT ?
+            embedding MATCH ? AND k = ?
         """
     else:
         # Basic query with just IDs and similarity
@@ -186,13 +183,10 @@ def _knn_vector_search(
         FROM 
             food_embeddings
         WHERE 
-            embedding MATCH ?
-        ORDER BY 
-            distance
-        LIMIT ?
+            embedding MATCH ? AND k = ?
         """
     
-    # Execute the query
+    # Execute the query with embedding and k parameter
     cursor = execute_query(conn, query, (query_json, limit))
     return cursor.fetchall()
 
