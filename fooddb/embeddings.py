@@ -138,6 +138,65 @@ def store_embedding(fdc_id: int, embedding: List[float], model: str, db_path: st
             close_db(conn)
 
 
+def _knn_vector_search(
+    conn, 
+    query_embedding: List[float],
+    limit: int = 10,
+    include_description: bool = False
+) -> List:
+    """
+    Helper function to perform KNN vector search with the given embedding.
+    
+    Args:
+        conn: SQLite connection with sqlite-vec loaded
+        query_embedding: The embedding vector to search for
+        limit: Maximum number of results to return
+        include_description: Whether to include food descriptions in results
+        
+    Returns:
+        List of tuples with search results
+    """
+    # Convert embedding to JSON string for the MATCH query
+    query_json = json.dumps(query_embedding)
+    
+    # The 'distance' from vec0 is L2 distance, not cosine, so we convert to similarity
+    if include_description:
+        # Query with food descriptions
+        query = """
+        SELECT 
+            fe.rowid, 
+            f.description,
+            1 - (distance / 2) AS similarity
+        FROM 
+            food_embeddings fe
+        JOIN 
+            food f ON fe.rowid = f.fdc_id
+        WHERE 
+            embedding MATCH ?
+        ORDER BY 
+            distance
+        LIMIT ?
+        """
+    else:
+        # Basic query with just IDs and similarity
+        query = """
+        SELECT 
+            rowid,
+            1 - (distance / 2) AS similarity
+        FROM 
+            food_embeddings
+        WHERE 
+            embedding MATCH ?
+        ORDER BY 
+            distance
+        LIMIT ?
+        """
+    
+    # Execute the query
+    cursor = execute_query(conn, query, (query_json, limit))
+    return cursor.fetchall()
+
+
 def search_by_embedding(
     query_embedding: List[float], 
     limit: int = 10, 
@@ -157,26 +216,8 @@ def search_by_embedding(
     conn = connect_db(db_path)
     
     try:
-        
-        # Convert embedding to JSON string for the MATCH query
-        query_json = json.dumps(query_embedding)
-        
-        # Search using KNN MATCH syntax for faster retrieval
-        # The 'distance' from vec0 is L2 distance, not cosine, so we convert to similarity
-        cursor = execute_query(conn, """
-        SELECT 
-            rowid,
-            1 - (distance / 2) AS similarity
-        FROM 
-            food_embeddings
-        WHERE 
-            embedding MATCH ?
-        ORDER BY 
-            distance
-        LIMIT ?
-        """, (query_json, limit))
-        
-        return cursor.fetchall()
+        results = _knn_vector_search(conn, query_embedding, limit, include_description=False)
+        return results
     except Exception as e:
         print(f"Error searching by embedding: {e}")
         return []
@@ -453,29 +494,9 @@ def search_food_by_text(
     conn = connect_db(db_path)
     
     try:
-        
-        # Convert embedding to JSON string for the MATCH query
-        query_json = json.dumps(query_embedding)
-        
-        # Search using KNN MATCH syntax for faster retrieval 
+        # Search using KNN with our helper function
         query_start_time = time.time()
-        cursor = execute_query(conn, """
-        SELECT 
-            fe.rowid, 
-            f.description,
-            1 - (distance / 2) AS similarity
-        FROM 
-            food_embeddings fe
-        JOIN 
-            food f ON fe.rowid = f.fdc_id
-        WHERE 
-            embedding MATCH ?
-        ORDER BY 
-            distance
-        LIMIT ?
-        """, (query_json, limit))
-        
-        results = cursor.fetchall()
+        results = _knn_vector_search(conn, query_embedding, limit, include_description=True)
         query_time = time.time() - query_start_time
         logger.info(f"KNN query completed in {query_time:.2f} seconds, returning {len(results)} results")
         
