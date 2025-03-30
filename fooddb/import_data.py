@@ -330,14 +330,8 @@ def fast_bulk_import(db_path: str, data_dir: str):
     """Use direct SQLite connection for faster imports"""
     print("Using fast direct SQLite import...")
     
-    # Extract SQLite path from SQLAlchemy connection string
-    if db_path.startswith('sqlite:///'):
-        sqlite_path = db_path[10:]
-    else:
-        sqlite_path = db_path
-    
-    # Connect directly to SQLite
-    conn = sqlite3.connect(sqlite_path)
+    # Connect directly to SQLite - no need to extract from SQLAlchemy URL anymore
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
     # Create tables if they don't exist

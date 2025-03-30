@@ -128,55 +128,37 @@ def mock_session():
 
 
 @pytest.mark.asyncio
-async def test_get_food_by_id(mock_session):
-    """Test retrieving food details by ID."""
-    with patch("fooddb.server.get_db_session", return_value=(mock_session, None)):
-        food_service = FoodDBService()
+async def test_food_search(mock_session):
+    """Test searching for foods using vector search."""
+    # Mock the search_food_by_text function
+    with patch("fooddb.server.search_food_by_text") as mock_search:
+        # Setup mock return value
+        mock_search.return_value = [(12345, "Test Food", 0.95)]
         
-        # Get food by ID
-        food_info = await food_service.get_food_by_id(12345)
-        
-        # Verify the result
-        assert food_info is not None
-        assert food_info.id == 12345
-        assert food_info.name == "Test Food"
-        assert food_info.category == "Test Category"
-        
-        # Check macros
-        assert food_info.macros.calories == 200.0
-        assert food_info.macros.protein == 10.0
-        
-        # Check servings
-        assert len(food_info.servings) == 1
-        assert food_info.servings[0].unit == "cup"
-        assert food_info.servings[0].grams == 100.0
-
-
-@pytest.mark.asyncio
-async def test_search_foods(mock_session):
-    """Test searching for foods by name."""
-    with patch("fooddb.server.get_db_session", return_value=(mock_session, None)):
+        # Create service
         food_service = FoodDBService()
         
         # Search for foods
-        results = await food_service.search_foods("Test")
+        results = await food_service.food_search("Test query", 5, "test-model")
         
         # Verify the results
         assert len(results) == 1
         assert results[0].id == 12345
         assert results[0].name == "Test Food"
+        assert results[0].similarity == 0.95
+        
+        # Verify the search function was called
+        mock_search.assert_called_once_with("Test query", limit=5, model="test-model")
 
 
 @pytest.mark.asyncio
-async def test_search_foods_ai(mock_session):
-    """Test searching for foods using AI."""
+async def test_food_service_init(mock_session):
+    """Test FoodDBService initialization."""
     with patch("fooddb.server.get_db_session", return_value=(mock_session, None)):
-        food_service = FoodDBService()
+        # Test with default path
+        service1 = FoodDBService()
+        assert service1.db_path == "/Users/eiz/code/fooddb/fooddb.sqlite"
         
-        # Search for foods using AI
-        results = await food_service.search_foods_ai("Test")
-        
-        # Verify the results
-        assert len(results) == 1
-        assert results[0].id == 12345
-        assert results[0].name == "Test Food"
+        # Test with custom path
+        service2 = FoodDBService("custom.db")
+        assert service2.db_path == "custom.db"

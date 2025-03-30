@@ -1,17 +1,16 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 import logging
 
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import joinedload
 
 # Import the MCP server package
 from mcp.server.fastmcp import FastMCP
 
-from fooddb.models import (
-    Food,
-    get_db_session
-)
+from fooddb.models import get_db_session
 from fooddb.embeddings import search_food_by_text
+
+# Import default database path from models.py
+from fooddb.models import DEFAULT_DB_PATH
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -28,10 +27,16 @@ class FoodSearchResult(BaseModel):
 
 
 class FoodDBService:
-    def __init__(self):
+    def __init__(self, db_path=None):
         """Initialize the food database service."""
+        # Use provided path or default to absolute path
+        if db_path is None:
+            db_path = DEFAULT_DB_PATH
+            logger.info(f"Using default database path: {db_path}")
+        
         # Initialize database connection
-        self.session, _ = get_db_session()
+        self.session, _ = get_db_session(db_path)
+        self.db_path = db_path
     
     async def food_search(self, query: str, limit: int = 10, model: str = "text-embedding-3-small") -> List[FoodSearchResult]:
         """

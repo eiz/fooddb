@@ -1,13 +1,15 @@
-import os
-import json
-import sqlite3
 import concurrent.futures
+import json
 import logging
+import os
+import sqlite3
 import time
 from typing import List, Optional, Tuple
 
 from openai import OpenAI
 import sqlite_vec
+
+from fooddb.models import DEFAULT_DB_PATH
 
 # Get logger for this module
 logger = logging.getLogger("fooddb.embeddings")
@@ -27,13 +29,9 @@ def execute_query(conn, query, params=None, many=False):
 # Log connection operations
 def connect_db(db_path):
     """Connect to the database with logging and loading the sqlite-vec extension"""
-    if db_path.startswith('sqlite:///'):
-        sqlite_path = db_path[10:]
-    else:
-        sqlite_path = db_path
-    
-    logger.info(f"SQL: Opening connection to {sqlite_path}")
-    conn = sqlite3.connect(sqlite_path)
+    # Always use the path directly for sqlite3.connect
+    logger.info(f"SQL: Opening connection to {db_path}")
+    conn = sqlite3.connect(db_path)
     
     # Always load the sqlite-vec extension for all connections
     conn.enable_load_extension(True)
@@ -58,8 +56,10 @@ if os.environ.get("OPENAI_API_KEY"):
 # Embedding dimensions for the model we'll use
 EMBEDDING_DIMS = 1536  # For text-embedding-3-small
 
-def setup_vector_db(db_path: str = "fooddb.sqlite") -> None:
+def setup_vector_db(db_path: str = None) -> None:
     """Set up the vector database with necessary tables and indexes."""
+    if db_path is None:
+        db_path = DEFAULT_DB_PATH
     conn = connect_db(db_path)
     cursor = conn.cursor()
     
@@ -106,8 +106,10 @@ def generate_embedding(text: str, model: str = "text-embedding-3-small") -> Opti
         return None
 
 
-def store_embedding(fdc_id: int, embedding: List[float], model: str, db_path: str = "fooddb.sqlite", conn=None) -> bool:
+def store_embedding(fdc_id: int, embedding: List[float], model: str, db_path: str = None, conn=None) -> bool:
     """Store an embedding vector in the database."""
+    if db_path is None:
+        db_path = DEFAULT_DB_PATH
     # Allow passing an existing connection to avoid repeated connection setup
     close_conn = False
     if conn is None:
@@ -189,10 +191,9 @@ def _knn_vector_search(
 def search_by_embedding(
     query_embedding: List[float], 
     limit: int = 10, 
-    db_path: str = "fooddb.sqlite"
+    db_path: str = None
 ) -> List[Tuple[int, float]]:
-    """
-    Search for foods using vector similarity with KNN.
+    """Search for foods using vector similarity with KNN.
     
     Args:
         query_embedding: The embedding vector to search for
@@ -202,6 +203,8 @@ def search_by_embedding(
     Returns:
         List of tuples (fdc_id, similarity_score)
     """
+    if db_path is None:
+        db_path = DEFAULT_DB_PATH
     conn = connect_db(db_path)
     
     try:
@@ -307,12 +310,11 @@ def process_embedding_batch(
 def generate_batch_embeddings(
     batch_size: int = 1000, 
     model: str = "text-embedding-3-small",
-    db_path: str = "fooddb.sqlite",
+    db_path: str = None,
     parallel: int = 1,
     timeout: int = 600  # Default timeout in seconds (10 minutes)
 ) -> None:
-    """
-    Generate embeddings for ALL foods that don't have embeddings yet.
+    """Generate embeddings for ALL foods that don't have embeddings yet.
     
     Args:
         batch_size: Number of foods to process in each batch
@@ -321,6 +323,8 @@ def generate_batch_embeddings(
         parallel: Number of parallel API requests to make (1 = sequential)
         timeout: Maximum time to run in seconds (default: 10 minutes)
     """
+    if db_path is None:
+        db_path = DEFAULT_DB_PATH
     start_time = time.time()
     
     if not client:
@@ -452,10 +456,9 @@ def search_food_by_text(
     query: str, 
     limit: int = 10, 
     model: str = "text-embedding-3-small",
-    db_path: str = "fooddb.sqlite"
+    db_path: str = None
 ) -> List[Tuple[int, str, float]]:
-    """
-    Search for foods using semantic text matching with KNN.
+    """Search for foods using semantic text matching with KNN.
     
     Args:
         query: Text query to search for
@@ -466,6 +469,8 @@ def search_food_by_text(
     Returns:
         List of tuples (fdc_id, description, similarity_score)
     """
+    if db_path is None:
+        db_path = DEFAULT_DB_PATH
     if not client:
         logger.warning("OpenAI client not initialized. Set OPENAI_API_KEY environment variable.")
         return []

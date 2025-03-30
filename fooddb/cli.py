@@ -4,6 +4,7 @@ import click
 from fooddb.import_data import import_all_data
 from fooddb.embeddings import setup_vector_db, generate_batch_embeddings, search_food_by_text
 from fooddb.server import mcp
+from fooddb.models import DEFAULT_DB_PATH
 
 # Default logging configuration - will be overridden in CLI
 logging.basicConfig(
@@ -37,7 +38,7 @@ def cli(verbose):
 )
 @click.option(
     "--db-path",
-    default="sqlite:///fooddb.sqlite",
+    default=DEFAULT_DB_PATH,
     help="SQLite database path",
 )
 @click.option(
@@ -94,7 +95,7 @@ def init_db(data_dir, db_path, nuke, embeddings, parallel, timeout):
 )
 @click.option(
     "--db-path",
-    default="sqlite:///fooddb.sqlite",
+    default=DEFAULT_DB_PATH,
     help="SQLite database path",
 )
 @click.option(
@@ -165,7 +166,7 @@ def run_server(transport, port):
 )
 @click.option(
     "--db-path",
-    default="sqlite:///fooddb.sqlite",
+    default=DEFAULT_DB_PATH,
     help="SQLite database path",
 )
 @click.option(

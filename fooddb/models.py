@@ -1,5 +1,8 @@
-# No datetime import needed
+# Standard library imports
+import os
+import pathlib
 
+# Third-party imports
 from sqlalchemy import (
     Column,
     Date,
@@ -133,9 +136,23 @@ class InputFood(Base):
     food = relationship("Food", back_populates="input_foods")
 
 
-def get_db_session(db_path: str = "sqlite:///fooddb.sqlite"):
+# Get the directory where the project root is located
+PROJECT_ROOT = pathlib.Path(__file__).parent.parent.absolute()
+DEFAULT_DB_PATH = os.path.join(PROJECT_ROOT, "fooddb.sqlite")
+
+def make_db_url(file_path: str) -> str:
+    """Convert a file path to a SQLAlchemy SQLite URL."""
+    if file_path.startswith('sqlite:///'):
+        return file_path
+    return f"sqlite:///{file_path}"
+
+
+def get_db_session(db_path: str = None):
     """Create a database session."""
-    engine = create_engine(db_path)
+    if db_path is None:
+        db_path = DEFAULT_DB_PATH
+    db_url = make_db_url(db_path)
+    engine = create_engine(db_url)
     Session = sessionmaker(bind=engine)
     return Session(), engine
 
