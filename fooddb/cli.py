@@ -171,7 +171,7 @@ def run_server(transport, port):
     default="text-embedding-3-small",
     help="OpenAI embedding model to use",
 )
-def vector_search(query: str, limit: int, db_path: str, model: str):
+def search(query: str, limit: int, db_path: str, model: str):
     """
     Search for foods using semantic vector search.
     

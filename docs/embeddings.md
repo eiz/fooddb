@@ -159,7 +159,9 @@ python -m fooddb generate-embeddings --parallel 4 --timeout 1800
 
 Test vector search directly:
 ```bash
-python -m fooddb vector-search "high protein breakfast" --limit 5
+python -m fooddb search "high protein breakfast" --limit 5
+# Or using the binary:
+food search "high protein breakfast" --limit 5
 ```
 
 ### In Code

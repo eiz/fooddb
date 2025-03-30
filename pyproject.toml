@@ -18,6 +18,9 @@ dependencies = [
     "sqlite-vec",
 ]
 
+[project.scripts]
+food = "fooddb.cli:cli"
+
 [project.optional-dependencies]
 dev = [
     "pytest",

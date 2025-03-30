@@ -14,6 +14,12 @@ To use the CLI, install the package in development mode:
 uv pip install -e .
 ```
 
+After installation, you can use either:
+- The module approach: `python -m fooddb [COMMAND]`
+- The `food` command directly: `food [COMMAND]`
+
+The `food` command is available in your environment's bin directory and should be automatically in your PATH when your virtual environment is active.
+
 ## Commands
 
 ### init-db
@@ -77,12 +83,14 @@ python -m fooddb generate-embeddings --parallel 8
 python -m fooddb generate-embeddings --timeout 1800
 ```
 
-### vector-search
+### search
 
 Searches for foods using semantic vector search.
 
 ```bash
-python -m fooddb vector-search QUERY [OPTIONS]
+python -m fooddb search QUERY [OPTIONS]
+# Or using the 'food' command:
+food search QUERY [OPTIONS]
 ```
 
 Arguments:
@@ -96,13 +104,16 @@ Options:
 Examples:
 ```bash
 # Basic search
-python -m fooddb vector-search "high protein breakfast"
+python -m fooddb search "high protein breakfast"
+food search "high protein breakfast"
 
 # Limit results to 5 items
-python -m fooddb vector-search "vegetarian dinner" --limit 5
+python -m fooddb search "vegetarian dinner" --limit 5
+food search "vegetarian dinner" --limit 5
 
 # Use a different model
-python -m fooddb vector-search "foods for athletes" --model text-embedding-3-large
+python -m fooddb search "foods for athletes" --model text-embedding-3-large
+food search "foods for athletes" --model text-embedding-3-large
 ```
 
 Output format:
@@ -139,17 +150,25 @@ python -m fooddb run-server --transport http --port 8080
 
 The CLI is implemented in `fooddb/cli.py` using the Click framework. The commands are defined using Click decorators and are organized in a command group.
 
-Each command imports the necessary functions from the appropriate modules to implement its functionality. For example, `init-db` uses functions from `import_data.py`, while `vector-search` uses functions from `embeddings.py`.
+Each command imports the necessary functions from the appropriate modules to implement its functionality. For example, `init-db` uses functions from `import_data.py`, while `search` uses functions from `embeddings.py`.
 
-### Entry Point
+### Entry Points
 
-The CLI can be invoked directly using the module:
+The CLI can be invoked in two ways:
 
+1. Using the module:
 ```bash
 python -m fooddb [COMMAND] [OPTIONS]
 ```
 
 This works because of the entry point defined in `__main__.py` which imports and calls the CLI group function.
+
+2. Using the `food` command:
+```bash
+food [COMMAND] [OPTIONS]
+```
+
+This works because of the console script entry point defined in `pyproject.toml`, which makes the `food` command available in your environment's bin directory.
 
 ## Error Handling
 
