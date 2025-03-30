@@ -1,17 +1,29 @@
-import os
 import time
-from pathlib import Path
-from typing import Optional
-
+import logging
 import click
-
 from fooddb.import_data import import_all_data
+
+# Default logging configuration - will be overridden in CLI
+logging.basicConfig(
+    level=logging.ERROR,  # Default to ERROR level unless --verbose is used
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 
 @click.group()
-def cli():
+@click.option(
+    "--verbose", "-v",
+    is_flag=True,
+    help="Enable verbose logging (INFO level)",
+)
+def cli(verbose):
     """FoodDB CLI for managing the food database and MCP server."""
-    pass
+    # Override the root logger level if verbose flag is set
+    if verbose:
+        logging.getLogger().setLevel(logging.INFO)
+    else:
+        logging.getLogger().setLevel(logging.ERROR)
 
 
 @cli.command()

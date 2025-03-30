@@ -9,12 +9,7 @@ from typing import List, Optional, Tuple
 from openai import OpenAI
 import sqlite_vec
 
-# Configure logging with timestamps
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+# Get logger for this module
 logger = logging.getLogger("fooddb.embeddings")
 
 # Wrapper for database operations with query logging
