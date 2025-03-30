@@ -1,0 +1,16 @@
+{
+    "mcpServers": {
+        "fooddb": {
+            "command": "uv",
+            "args": [
+                "--directory",
+                "/Users/eiz/code/fooddb",
+                "run",
+                "python",
+                "-m",
+                "fooddb.cli",
+                "run-server"
+            ]
+        }
+    }
+}

@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fooddb"
+version = "0.1.0"
+description = "MCP server for USDA Food Data Central"
+requires-python = ">=3.10"
+dependencies = [
+    "click",
+    "pydantic>=2.0.0",
+    "sqlalchemy>=2.0.0",
+    "pandas",
+    "mcp>=1.2.0",
+    "numpy",
+    "openai",
+    "sqlite-vec",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+    "black",
+    "mypy",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_any_generics = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+
+[tool.pytest]
+testpaths = ["tests"]
