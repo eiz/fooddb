@@ -88,13 +88,13 @@ python -m fooddb generate-embeddings --timeout 1800
 Searches for foods using semantic vector search.
 
 ```bash
-python -m fooddb search QUERY [OPTIONS]
+python -m fooddb search QUERY... [OPTIONS]
 # Or using the 'food' command:
-food search QUERY [OPTIONS]
+food search QUERY... [OPTIONS]
 ```
 
 Arguments:
-* `QUERY`: The text to search for (e.g., "high protein breakfast")
+* `QUERY...`: The text to search for. Multiple words are combined into a single query (e.g., high protein breakfast)
 
 Options:
 * `--limit INTEGER`: Maximum number of results to return (default: 10)
@@ -103,17 +103,17 @@ Options:
 
 Examples:
 ```bash
-# Basic search
-python -m fooddb search "high protein breakfast"
-food search "high protein breakfast"
+# Basic search - no quotes needed around multi-word queries
+python -m fooddb search high protein breakfast
+food search high protein breakfast
 
 # Limit results to 5 items
-python -m fooddb search "vegetarian dinner" --limit 5
-food search "vegetarian dinner" --limit 5
+python -m fooddb search vegetarian dinner --limit 5
+food search vegetarian dinner --limit 5
 
 # Use a different model
-python -m fooddb search "foods for athletes" --model text-embedding-3-large
-food search "foods for athletes" --model text-embedding-3-large
+python -m fooddb search foods for athletes --model text-embedding-3-large
+food search foods for athletes --model text-embedding-3-large
 ```
 
 Output format:

@@ -154,7 +154,7 @@ def run_server(transport, port):
 
 
 @cli.command()
-@click.argument("query")
+@click.argument("query", nargs=-1, required=True)
 @click.option(
     "--limit",
     default=10,
@@ -171,17 +171,21 @@ def run_server(transport, port):
     default="text-embedding-3-small",
     help="OpenAI embedding model to use",
 )
-def search(query: str, limit: int, db_path: str, model: str):
+def search(query: tuple, limit: int, db_path: str, model: str):
     """
     Search for foods using semantic vector search.
     
-    QUERY is the text to search for (e.g., "high protein breakfast").
+    QUERY is the text to search for (e.g., high protein breakfast).
+    Multiple words will be combined into a single query.
     """
-    click.echo(f"🔍 Searching for foods matching: '{query}'")
+    # Join the tuple of query words into a single string
+    query_text = " ".join(query)
+    
+    click.echo(f"🔍 Searching for foods matching: '{query_text}'")
     click.echo(f"Using model: {model}")
     
     start_time = time.time()
-    results = search_food_by_text(query, limit, model, db_path)
+    results = search_food_by_text(query_text, limit, model, db_path)
     elapsed_time = time.time() - start_time
     
     if not results:
