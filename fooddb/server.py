@@ -97,15 +97,37 @@ async def food_search(query: str, limit: int = 10, model: str = "text-embedding-
     Returns:
         List of food items with similarity scores
     """
-    results = await food_service.food_search(query, limit, model)
-    # Convert Pydantic models to dictionaries for MCP compatibility
-    return [result.model_dump() for result in results]
+    logger.info(f"MCP food_search called with query: '{query}', limit: {limit}, model: {model}")
+    
+    try:
+        results = await food_service.food_search(query, limit, model)
+        logger.info(f"Search returned {len(results)} results")
+        
+        if results:
+            # Log first few results
+            top_results = results[:3]
+            for i, res in enumerate(top_results):
+                logger.info(f"Top result {i+1}: ID={res.id}, Name='{res.name}', Similarity={res.similarity:.2f}")
+        
+        # Convert Pydantic models to dictionaries for MCP compatibility
+        dict_results = [result.model_dump() for result in results]
+        return dict_results
+    except Exception as e:
+        logger.error(f"Error in food_search: {e}", exc_info=True)
+        # Return empty results on error
+        return []
 
 
 def run_server():
     """Run the MCP server."""
+    # Log server startup in server module
+    logger.info("Starting MCP server via direct server.py invocation")
+    
     # Start the MCP server
-    mcp.run(transport="stdio")
+    try:
+        mcp.run(transport="stdio")
+    except Exception as e:
+        logger.error(f"Error running MCP server: {e}", exc_info=True)
 
 
 if __name__ == "__main__":

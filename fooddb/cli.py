@@ -146,6 +146,23 @@ def generate_embeddings(batch_size, db_path, parallel, timeout):
 )
 def run_server(transport, port):
     """Run the MCP server using the specified transport."""
+    # Configure file logging for all modes
+    file_handler = logging.FileHandler("/tmp/food.log")
+    file_handler.setLevel(logging.DEBUG)
+    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(file_formatter)
+    
+    # Add the handler to the root logger
+    root_logger = logging.getLogger()
+    root_logger.addHandler(file_handler)
+    
+    # Set root logger to DEBUG to capture everything
+    previous_level = root_logger.level
+    root_logger.setLevel(logging.DEBUG)
+    
+    # Log server startup
+    root_logger.info(f"FoodDB server starting with transport: {transport}")
+    
     # Only print startup message for HTTP transport
     # For stdio transport, we must not print anything to avoid interfering with MCP protocol
     if transport == "http":
