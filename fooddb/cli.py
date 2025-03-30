@@ -46,11 +46,6 @@ def cli(verbose):
     help="Nuke the database before importing (clear all data)",
 )
 @click.option(
-    "--fast/--safe",
-    default=True,
-    help="Use fast direct import (default) or slower but safer ORM import",
-)
-@click.option(
     "--embeddings/--no-embeddings",
     default=True,
     help="Generate embeddings for vector search",
@@ -67,10 +62,9 @@ def cli(verbose):
     type=int,
     help="Maximum time for embedding generation in seconds (default: 10 minutes)",
 )
-def init_db(data_dir, db_path, nuke, fast, embeddings, parallel, timeout):
+def init_db(data_dir, db_path, nuke, embeddings, parallel, timeout):
     """Initialize the database with USDA food data."""
     click.echo(f"Importing data from {data_dir} to {db_path}")
-    click.echo(f"Using {'fast' if fast else 'safe'} import method")
     if nuke:
         click.echo("⚠️ Nuking database before import!")
     if embeddings:
@@ -83,7 +77,6 @@ def init_db(data_dir, db_path, nuke, fast, embeddings, parallel, timeout):
         data_dir, 
         db_path, 
         nuke=nuke, 
-        fast=fast, 
         create_embeddings=embeddings, 
         parallel=parallel,
         timeout=timeout

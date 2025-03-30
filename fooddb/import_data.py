@@ -475,7 +475,6 @@ def import_all_data(
     data_dir: str = "./data", 
     db_path: str = "sqlite:///fooddb.sqlite", 
     nuke: bool = False, 
-    fast: bool = True, 
     create_embeddings: bool = True,
     parallel: int = 1,
     timeout: int = 600  # Default timeout in seconds (10 minutes)
@@ -487,7 +486,6 @@ def import_all_data(
         data_dir: Directory containing CSV files
         db_path: Path to SQLite database
         nuke: Whether to clear all data before importing
-        fast: Whether to use fast direct import (True) or ORM import (False)
         create_embeddings: Whether to generate embeddings after import
         parallel: Number of parallel API requests for embeddings generation
         timeout: Maximum execution time for embedding generation in seconds
@@ -496,34 +494,8 @@ def import_all_data(
     if nuke:
         nuke_database(db_path)
     
-    if fast:
-        # Use fast direct import
-        fast_bulk_import(db_path, data_dir)
-    else:
-        # Use SQLAlchemy ORM import (slower but more reliable)
-        session, engine = get_db_session(db_path)
-        
-        # Initialize database (create tables)
-        init_db(engine)
-        
-        # Import data
-        import_nutrients(session, os.path.join(data_dir, "nutrient.csv"))
-        import_foods(session, os.path.join(data_dir, "food.csv"))
-        import_food_nutrients(session, os.path.join(data_dir, "food_nutrient.csv"))
-        import_food_portions(session, os.path.join(data_dir, "food_portion.csv"))
-        
-        # Import ingredient-related data if available
-        if os.path.exists(os.path.join(data_dir, "branded_food.csv")):
-            import_branded_foods(session, os.path.join(data_dir, "branded_food.csv"))
-        
-        if os.path.exists(os.path.join(data_dir, "food_component.csv")):
-            import_food_components(session, os.path.join(data_dir, "food_component.csv"))
-        
-        if os.path.exists(os.path.join(data_dir, "input_food.csv")):
-            import_input_foods(session, os.path.join(data_dir, "input_food.csv"))
-        
-        session.close()
-        print("Data import completed")
+    # Use direct import for all data
+    fast_bulk_import(db_path, data_dir)
     
     # Set up vector database for embeddings
     if create_embeddings:
