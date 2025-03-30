@@ -1,12 +1,6 @@
 """
 Test script for the ingredient functionality in the FoodDB.
 """
-import sys
-from pathlib import Path
-
-# Add the project root to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 from fooddb.models import (
     Food,
     BrandedFood,
