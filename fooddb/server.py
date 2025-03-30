@@ -9,7 +9,16 @@ from sqlalchemy.orm import Session, joinedload
 # Import the MCP server package
 from mcp.server.fastmcp import FastMCP
 
-from fooddb.models import Food, FoodNutrient, FoodPortion, Nutrient, get_db_session
+from fooddb.models import (
+    Food, 
+    FoodNutrient, 
+    FoodPortion, 
+    Nutrient, 
+    BrandedFood,
+    FoodComponent,
+    InputFood,
+    get_db_session
+)
 from fooddb.embeddings import (
     setup_vector_db,
     generate_embedding,
@@ -33,12 +42,40 @@ class ServingInfo(BaseModel):
     description: Optional[str] = Field(None, description="Description of the serving")
 
 
+class ComponentInfo(BaseModel):
+    name: str = Field(..., description="Component name")
+    percent_weight: Optional[float] = Field(None, description="Percentage by weight")
+    gram_weight: Optional[float] = Field(None, description="Weight in grams")
+    is_refuse: Optional[bool] = Field(None, description="Whether this component is refuse/waste")
+
+
+class IngredientInfo(BaseModel):
+    seq_num: int = Field(..., description="Sequence number in recipe")
+    amount: float = Field(..., description="Amount of ingredient")
+    description: str = Field(..., description="Description of ingredient")
+    unit: str = Field(..., description="Unit of measurement")
+    gram_weight: float = Field(..., description="Weight in grams")
+
+
+class BrandedFoodInfo(BaseModel):
+    brand_owner: Optional[str] = Field(None, description="Brand owner name")
+    brand_name: Optional[str] = Field(None, description="Brand name")
+    ingredients: Optional[str] = Field(None, description="Ingredient list as text")
+    serving_size: Optional[float] = Field(None, description="Serving size")
+    serving_size_unit: Optional[str] = Field(None, description="Serving size unit")
+    household_serving_fulltext: Optional[str] = Field(None, description="Household serving description")
+    branded_food_category: Optional[str] = Field(None, description="Food category")
+
+
 class FoodInfo(BaseModel):
     id: int = Field(..., description="Food ID")
     name: str = Field(..., description="Food name/description")
     category: Optional[str] = Field(None, description="Food category")
     macros: Macros = Field(..., description="Macronutrient information")
     servings: List[ServingInfo] = Field(default_factory=list, description="Available serving sizes")
+    branded_food: Optional[BrandedFoodInfo] = Field(None, description="Branded food information if available")
+    components: List[ComponentInfo] = Field(default_factory=list, description="Food components")
+    ingredients: List[IngredientInfo] = Field(default_factory=list, description="Food ingredients")
 
 
 # Nutrient IDs for macros (based on USDA FoodData Central)
@@ -136,17 +173,92 @@ class FoodDBService:
             
         return servings
     
+    def _get_branded_food_info(self, food_id: int) -> Optional[BrandedFoodInfo]:
+        """Get branded food information if available."""
+        branded_food = (
+            self.session.query(BrandedFood)
+            .filter(BrandedFood.fdc_id == food_id)
+            .first()
+        )
+        
+        if not branded_food:
+            return None
+        
+        return BrandedFoodInfo(
+            brand_owner=branded_food.brand_owner,
+            brand_name=branded_food.brand_name,
+            ingredients=branded_food.ingredients,
+            serving_size=branded_food.serving_size,
+            serving_size_unit=branded_food.serving_size_unit,
+            household_serving_fulltext=branded_food.household_serving_fulltext,
+            branded_food_category=branded_food.branded_food_category
+        )
+    
+    def _get_components_for_food(self, food_id: int) -> List[ComponentInfo]:
+        """Get component information for a specific food."""
+        components = (
+            self.session.query(FoodComponent)
+            .filter(FoodComponent.fdc_id == food_id)
+            .all()
+        )
+        
+        result = []
+        for component in components:
+            if not component.name:
+                continue
+                
+            comp_info = ComponentInfo(
+                name=component.name,
+                percent_weight=component.pct_weight,
+                gram_weight=component.gram_weight,
+                is_refuse=component.is_refuse
+            )
+            result.append(comp_info)
+            
+        return result
+    
+    def _get_ingredients_for_food(self, food_id: int) -> List[IngredientInfo]:
+        """Get ingredient information for a specific food."""
+        ingredients = (
+            self.session.query(InputFood)
+            .filter(InputFood.fdc_id == food_id)
+            .order_by(InputFood.seq_num)
+            .all()
+        )
+        
+        result = []
+        for ingredient in ingredients:
+            if not ingredient.sr_description:
+                continue
+                
+            ing_info = IngredientInfo(
+                seq_num=ingredient.seq_num or 0,
+                amount=ingredient.amount or 0.0,
+                description=ingredient.sr_description,
+                unit=ingredient.unit or "g",
+                gram_weight=ingredient.gram_weight or 0.0
+            )
+            result.append(ing_info)
+            
+        return result
+        
     def _format_food_info(self, food: Food) -> FoodInfo:
         """Format a food record into a FoodInfo response."""
         macros = self._get_macros_for_food(food.fdc_id)
         servings = self._get_servings_for_food(food.fdc_id)
+        branded_food = self._get_branded_food_info(food.fdc_id)
+        components = self._get_components_for_food(food.fdc_id)
+        ingredients = self._get_ingredients_for_food(food.fdc_id)
         
         return FoodInfo(
             id=food.fdc_id,
             name=food.description,
             category=food.food_category_id,
             macros=macros,
-            servings=servings
+            servings=servings,
+            branded_food=branded_food,
+            components=components,
+            ingredients=ingredients
         )
 
     async def search_foods(self, query: str, limit: int = 5) -> List[FoodInfo]:
@@ -363,6 +475,123 @@ async def get_food_by_id(food_id: int) -> Optional[Dict[str, Any]]:
     result = await food_service.get_food_by_id(food_id)
     # Convert Pydantic model to dictionary for MCP compatibility
     return result.model_dump() if result else None
+
+
+@mcp.tool()
+async def search_foods_by_ingredient(ingredient: str, limit: int = 5) -> List[Dict[str, Any]]:
+    """
+    Search for foods containing a specific ingredient.
+    
+    This search looks for the ingredient in branded food ingredient lists
+    and in the input foods that make up composite foods.
+    
+    Args:
+        ingredient: Ingredient name to search for
+        limit: Maximum number of results to return
+    """
+    # Search in branded foods' ingredients lists
+    branded_foods = (
+        food_service.session.query(BrandedFood)
+        .filter(BrandedFood.ingredients.ilike(f"%{ingredient}%"))
+        .limit(limit * 2)  # Get more than needed since some might be filtered out
+        .all()
+    )
+    
+    food_ids = []
+    for bf in branded_foods:
+        if len(food_ids) >= limit:
+            break
+        food_ids.append(bf.fdc_id)
+    
+    # Get the ingredients from input foods
+    input_foods = (
+        food_service.session.query(InputFood)
+        .filter(InputFood.sr_description.ilike(f"%{ingredient}%"))
+        .limit(limit * 2)
+        .all()
+    )
+    
+    for input_food in input_foods:
+        if len(food_ids) >= limit:
+            break
+        if input_food.fdc_id not in food_ids:
+            food_ids.append(input_food.fdc_id)
+    
+    # Get the food objects
+    foods = food_service.session.query(Food).filter(Food.fdc_id.in_(food_ids)).all()
+    
+    # Format results
+    results = [food_service._format_food_info(food) for food in foods]
+    return [result.model_dump() for result in results[:limit]]
+
+
+@mcp.tool()
+async def get_ingredient_info(ingredient: str, limit: int = 5) -> List[Dict[str, Any]]:
+    """
+    Get nutritional information about a specific ingredient.
+    
+    Searches for the ingredient in the input foods database and returns the
+    nutritional information for the raw ingredient entries that match.
+    
+    Args:
+        ingredient: Ingredient name to search for
+        limit: Maximum number of results to return
+    """
+    # Look for ingredient in descriptions
+    foods = (
+        food_service.session.query(Food)
+        .filter(Food.description.ilike(f"%{ingredient}%"))
+        .filter(Food.data_type.in_(["foundation_food", "sr_legacy_food", "survey_fndds_food"]))
+        .limit(limit * 2)
+        .all()
+    )
+    
+    # Format results
+    results = [food_service._format_food_info(food) for food in foods]
+    return [result.model_dump() for result in results[:limit]]
+
+
+@mcp.tool()
+async def search_foods_by_nutrient_content(nutrient_name: str, min_amount: float = 0, limit: int = 5) -> List[Dict[str, Any]]:
+    """
+    Search for foods with a minimum amount of a specific nutrient.
+    
+    Args:
+        nutrient_name: Name of the nutrient to search for
+        min_amount: Minimum amount of the nutrient per 100g
+        limit: Maximum number of results to return
+    """
+    # Find the nutrient ID
+    nutrient = (
+        food_service.session.query(Nutrient)
+        .filter(Nutrient.name.ilike(f"%{nutrient_name}%"))
+        .first()
+    )
+    
+    if not nutrient:
+        return []
+    
+    # Get foods with that nutrient above the minimum amount
+    food_nutrients = (
+        food_service.session.query(FoodNutrient)
+        .filter(FoodNutrient.nutrient_id == nutrient.id)
+        .filter(FoodNutrient.amount >= min_amount)
+        .order_by(FoodNutrient.amount.desc())
+        .limit(limit)
+        .all()
+    )
+    
+    # Get the food objects
+    food_ids = [fn.fdc_id for fn in food_nutrients]
+    foods = food_service.session.query(Food).filter(Food.fdc_id.in_(food_ids)).all()
+    
+    # Order the foods to match the order of the nutrient values
+    food_map = {food.fdc_id: food for food in foods}
+    ordered_foods = [food_map[fdc_id] for fdc_id in food_ids if fdc_id in food_map]
+    
+    # Format results
+    results = [food_service._format_food_info(food) for food in ordered_foods]
+    return [result.model_dump() for result in results]
 
 
 def run_server():

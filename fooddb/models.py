@@ -1,5 +1,5 @@
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Text
 
 from sqlalchemy import (
     Column,
@@ -8,6 +8,8 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
+    Boolean,
     create_engine,
 )
 from sqlalchemy.ext.declarative import declarative_base
@@ -27,6 +29,9 @@ class Food(Base):
 
     nutrients = relationship("FoodNutrient", back_populates="food")
     portions = relationship("FoodPortion", back_populates="food")
+    branded_food = relationship("BrandedFood", back_populates="food", uselist=False)
+    components = relationship("FoodComponent", back_populates="food")
+    input_foods = relationship("InputFood", back_populates="food")
 
 
 class Nutrient(Base):
@@ -66,6 +71,67 @@ class FoodPortion(Base):
     gram_weight = Column(Float)
     
     food = relationship("Food", back_populates="portions")
+
+
+class BrandedFood(Base):
+    __tablename__ = "branded_food"
+
+    fdc_id = Column(Integer, ForeignKey("food.fdc_id"), primary_key=True)
+    brand_owner = Column(String)
+    brand_name = Column(String)
+    subbrand_name = Column(String)
+    gtin_upc = Column(String)
+    ingredients = Column(Text)
+    not_a_significant_source_of = Column(String)
+    serving_size = Column(Float)
+    serving_size_unit = Column(String)
+    household_serving_fulltext = Column(String)
+    branded_food_category = Column(String)
+    data_source = Column(String)
+    package_weight = Column(String)
+    modified_date = Column(Date)
+    available_date = Column(Date)
+    market_country = Column(String)
+    discontinued_date = Column(Date)
+    preparation_state_code = Column(String)
+    trade_channel = Column(String)
+    short_description = Column(String)
+    
+    food = relationship("Food", back_populates="branded_food")
+
+
+class FoodComponent(Base):
+    __tablename__ = "food_component"
+
+    id = Column(Integer, primary_key=True)
+    fdc_id = Column(Integer, ForeignKey("food.fdc_id"))
+    name = Column(String)
+    pct_weight = Column(Float)
+    is_refuse = Column(Boolean)
+    gram_weight = Column(Float)
+    data_points = Column(Integer)
+    min_year_acquired = Column(Integer)
+    
+    food = relationship("Food", back_populates="components")
+
+
+class InputFood(Base):
+    __tablename__ = "input_food"
+
+    id = Column(Integer, primary_key=True)
+    fdc_id = Column(Integer, ForeignKey("food.fdc_id"))
+    fdc_id_of_input_food = Column(Integer)
+    seq_num = Column(Integer)
+    amount = Column(Float)
+    sr_code = Column(String)
+    sr_description = Column(String)
+    unit = Column(String)
+    portion_code = Column(String)
+    portion_description = Column(String)
+    gram_weight = Column(Float)
+    retention_code = Column(String)
+    
+    food = relationship("Food", back_populates="input_foods")
 
 
 def get_db_session(db_path: str = "sqlite:///fooddb.sqlite"):
